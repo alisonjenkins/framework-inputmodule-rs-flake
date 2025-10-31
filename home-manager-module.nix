@@ -450,12 +450,12 @@ in
       # LED Matrix services
       (mapAttrs' (name: serviceCfg:
         nameValuePair "inputmodule-control-led-${name}" (mkIf serviceCfg.enable {
-          Unit = {
+          unit = {
             Description = "Framework LED Matrix - ${name}";
             After = [ "graphical-session.target" ];
           };
 
-          Service = {
+          service = {
             Type = "simple";
             ExecStart =
               let
@@ -469,7 +469,7 @@ in
             RestartSec = serviceCfg.restartSec;
           };
 
-          Install = {
+          install = {
             WantedBy = serviceCfg.wantedBy;
           };
         })
@@ -478,12 +478,12 @@ in
       # B1 Display services
       (mapAttrs' (name: serviceCfg:
         nameValuePair "inputmodule-control-b1-${name}" (mkIf serviceCfg.enable {
-          Unit = {
+          unit = {
             Description = "Framework B1 Display - ${name}";
             After = [ "graphical-session.target" ];
           };
 
-          Service = {
+          service = {
             Type = "simple";
             ExecStart =
               let
@@ -497,7 +497,7 @@ in
             RestartSec = serviceCfg.restartSec;
           };
 
-          Install = {
+          install = {
             WantedBy = serviceCfg.wantedBy;
           };
         })
@@ -506,12 +506,12 @@ in
       # C1 Minimal services
       (mapAttrs' (name: serviceCfg:
         nameValuePair "inputmodule-control-c1-${name}" (mkIf serviceCfg.enable {
-          Unit = {
+          unit = {
             Description = "Framework C1 Minimal - ${name}";
             After = [ "graphical-session.target" ];
           };
 
-          Service = {
+          service = {
             Type = "simple";
             ExecStart =
               let
@@ -525,7 +525,7 @@ in
             RestartSec = serviceCfg.restartSec;
           };
 
-          Install = {
+          install = {
             WantedBy = serviceCfg.wantedBy;
           };
         })
