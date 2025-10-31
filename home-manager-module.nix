@@ -105,7 +105,7 @@ in
           };
 
           percentage = mkOption {
-            type = types.nullOr types.ints.between 0 100;
+            type = types.nullOr (types.ints.between 0 100);
             default = null;
             example = 75;
             description = "Display a percentage (0-100).";
@@ -162,7 +162,7 @@ in
 
           # Settings
           brightness = mkOption {
-            type = types.nullOr types.ints.between 0 255;
+            type = types.nullOr (types.ints.between 0 255);
             default = null;
             example = 128;
             description = "Set LED max brightness (0-255).";
