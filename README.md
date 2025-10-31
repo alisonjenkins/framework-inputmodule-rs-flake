@@ -58,6 +58,61 @@ The udev rules will be automatically installed and loaded.
 
 ### Home Manager
 
+#### Option 1: Home Manager Module with Systemd Services (Recommended)
+
+Use the home manager module with type-safe options for automatic systemd service setup:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    framework-inputmodule.url = "github:alisonjenkins/framework-16-inputmodule-rs-flake";
+  };
+
+  outputs = { self, nixpkgs, home-manager, framework-inputmodule, ... }: {
+    homeConfigurations.your-username = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      modules = [
+        framework-inputmodule.homeManagerModules.default
+        {
+          services.inputmodule-control = {
+            enable = true;
+            package = framework-inputmodule.packages.x86_64-linux.inputmodule-control;
+            
+            # LED Matrix with typed options
+            ledMatrix.clock = {
+              clock = true;
+              brightness = 128;
+              breathing = true;
+            };
+            
+            # Control multiple LED matrices independently
+            # ledMatrix.left = {
+            #   serialDevice = "/dev/ttyACM0";
+            #   clock = true;
+            # };
+            # ledMatrix.right = {
+            #   serialDevice = "/dev/ttyACM1";
+            #   randomEq = true;
+            # };
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+The module exposes all inputmodule-control options as typed Nix options organized by device type:
+- `ledMatrix.<name>` - LED Matrix module configuration
+- `b1Display.<name>` - B1 Display module configuration  
+- `c1Minimal.<name>` - C1 Minimal module configuration
+
+See [HOME-MANAGER.md](./HOME-MANAGER.md) for detailed configuration examples and complete API reference.
+
+#### Option 2: Install Package Only
+
 Install just the control tool in your user environment:
 
 ```nix

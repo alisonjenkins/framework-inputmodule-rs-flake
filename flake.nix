@@ -24,5 +24,10 @@
       packages = forAllSystems (system:
         (import ./default.nix) pkgsFor.${system}
       );
+
+      homeManagerModules = {
+        inputmodule-control = import ./home-manager-module.nix;
+        default = self.homeManagerModules.inputmodule-control;
+      };
     };
 }
