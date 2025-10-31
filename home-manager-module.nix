@@ -227,7 +227,7 @@ in
           # Systemd options
           waitForDevice = mkOption {
             type = types.bool;
-            default = true;
+            default = false;
             description = "Wait for device to be available before starting.";
           };
 
