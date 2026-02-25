@@ -53,6 +53,53 @@ let
     (optionalString (opts.setColor != null) "--set-color ${opts.setColor}")
   ]);
 
+  # Helper to create a device discovery wrapper script for "both" LED matrix config.
+  # When ledMatrix.both is used, we create independent left/right services that each
+  # discover their target device at runtime by enumerating connected LED Matrix modules.
+  mkLedMatrixDiscoveryScript = { index, serviceCfg }:
+    let
+      side = if index == 0 then "left" else "right";
+      waitArg = optionalString serviceCfg.waitForDevice "--wait-for-device ";
+      deviceArgs = buildLedMatrixArgs serviceCfg;
+    in
+      pkgs.writeShellScript "inputmodule-led-${side}" ''
+        discover_devices() {
+          devices=()
+          current_dev=""
+          while IFS= read -r line; do
+            if [[ "$line" == /dev/* ]]; then
+              current_dev="$line"
+            elif [[ "$line" == *"LED Matrix"* ]] && [[ -n "$current_dev" ]]; then
+              devices+=("$current_dev")
+              current_dev=""
+            fi
+          done < <(${inputmodule-control}/bin/inputmodule-control --list 2>/dev/null)
+        }
+
+        discover_devices
+
+        ${if serviceCfg.waitForDevice then ''
+        while [ "''${#devices[@]}" -lt ${toString (index + 1)} ]; do
+          echo "Waiting for LED Matrix devices (need ${toString (index + 1)}, found ''${#devices[@]})..."
+          sleep 2
+          discover_devices
+        done
+        '' else ''
+        if [ "''${#devices[@]}" -lt ${toString (index + 1)} ]; then
+          echo "Error: Expected at least ${toString (index + 1)} LED Matrix device(s), found ''${#devices[@]}"
+          exit 1
+        fi
+        ''}
+
+        echo "Discovered ${side} LED Matrix device: ''${devices[${toString index}]}"
+        exec ${inputmodule-control}/bin/inputmodule-control --serial-dev "''${devices[${toString index}]}" ${waitArg}led-matrix ${deviceArgs}
+      '';
+
+  # Separate "both" entries from regular entries in ledMatrix config
+  hasBothLedMatrix = hasAttr "both" cfg.ledMatrix;
+  bothLedMatrixCfg = if hasBothLedMatrix then cfg.ledMatrix.both else null;
+  regularLedMatrix = filterAttrs (name: _: name != "both") cfg.ledMatrix;
+
 in
 {
   options.services.inputmodule-control = {
@@ -446,8 +493,15 @@ in
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !(hasAttr "both" cfg.ledMatrix && (hasAttr "left" cfg.ledMatrix || hasAttr "right" cfg.ledMatrix));
+        message = "services.inputmodule-control.ledMatrix: cannot use 'both' together with 'left' or 'right'";
+      }
+    ];
+
     systemd.user.services =
-      # LED Matrix services
+      # Regular LED Matrix services (non-"both")
       (mapAttrs' (name: serviceCfg:
         nameValuePair "inputmodule-control-led-${name}" (mkIf serviceCfg.enable {
           Unit = {
@@ -473,7 +527,35 @@ in
             WantedBy = serviceCfg.wantedBy;
           };
         })
-      ) cfg.ledMatrix)
+      ) regularLedMatrix)
+      //
+      # "both" LED Matrix - expanded to independent left and right services
+      (optionalAttrs (hasBothLedMatrix && bothLedMatrixCfg.enable) (
+        let
+          mkBothService = index:
+            let
+              side = if index == 0 then "left" else "right";
+            in
+              nameValuePair "inputmodule-control-led-${side}" {
+                Unit = {
+                  Description = "Framework LED Matrix - ${side}";
+                  After = [ "graphical-session.target" ];
+                };
+
+                Service = {
+                  Type = "simple";
+                  ExecStart = "${mkLedMatrixDiscoveryScript { inherit index; serviceCfg = bothLedMatrixCfg; }}";
+                  Restart = if bothLedMatrixCfg.restartOnFailure then "on-failure" else "no";
+                  RestartSec = bothLedMatrixCfg.restartSec;
+                };
+
+                Install = {
+                  WantedBy = bothLedMatrixCfg.wantedBy;
+                };
+              };
+        in
+          listToAttrs [ (mkBothService 0) (mkBothService 1) ]
+      ))
       //
       # B1 Display services
       (mapAttrs' (name: serviceCfg:
