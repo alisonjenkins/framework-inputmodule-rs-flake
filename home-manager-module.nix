@@ -59,7 +59,6 @@ let
   mkLedMatrixDiscoveryScript = { index, serviceCfg }:
     let
       side = if index == 0 then "left" else "right";
-      waitArg = optionalString serviceCfg.waitForDevice "--wait-for-device ";
       deviceArgs = buildLedMatrixArgs serviceCfg;
     in
       pkgs.writeShellScript "inputmodule-led-${side}" ''
@@ -92,7 +91,7 @@ let
         ''}
 
         echo "Discovered ${side} LED Matrix device: ''${devices[${toString index}]}"
-        exec ${inputmodule-control}/bin/inputmodule-control --serial-dev "''${devices[${toString index}]}" ${waitArg}led-matrix ${deviceArgs}
+        exec ${inputmodule-control}/bin/inputmodule-control --serial-dev "''${devices[${toString index}]}" led-matrix ${deviceArgs}
       '';
 
   # Separate "both" entries from regular entries in ledMatrix config
