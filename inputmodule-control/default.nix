@@ -6,7 +6,7 @@ pkgs.rustPlatform.buildRustPackage {
   pname = "inputmodule-control";
   version = src.rev;
   doCheck = false;
-  cargoHash = "sha256-iqB0JxRlIwdjTh+dPa3W5bwYVOFGWObmBXUETZC6Rk8=";
+  cargoHash = "sha256-PHJnr7WYz5nBS0XRvW77jEiYKPibkHLbnNWVSp3J6jE=";
   buildAndTestSubdir = "inputmodule-control";
 
   buildInputs = with pkgs; [
