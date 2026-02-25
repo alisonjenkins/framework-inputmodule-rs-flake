@@ -1,6 +1,6 @@
 {pkgs}: pkgs.fetchFromGitHub {
   owner = "FrameworkComputer";
   repo = "inputmodule-rs";
-  rev = "d9f18afb31d00a294e7bbb7395e2226b213b6733";
-  hash = "sha256-yujliiOemjf63DHz79xgj44L2IiCt+LmXT0HKkcwHsY=";
+  rev = "29af2f294a8627b99d00da41d6d581deb153ba02";
+  hash = "sha256-IUdkXSj98czfMtuMjQqjeptFyI0Teb35daZ66C32fg8=";
 }
