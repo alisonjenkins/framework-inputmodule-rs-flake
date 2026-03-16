@@ -55,43 +55,55 @@ let
 
   # Helper to create a device discovery wrapper script for "both" LED matrix config.
   # When ledMatrix.both is used, we create independent left/right services that each
-  # discover their target device at runtime by enumerating connected LED Matrix modules.
-  mkLedMatrixDiscoveryScript = { index, serviceCfg }:
+  # discover their target device at runtime using the USB hub topology to determine
+  # which physical side a device is on.
+  #
+  # On the Framework 16, the input module bay's internal USB hubs are wired to fixed
+  # root hub ports: hub at port 1-4 serves the left side, hub at port 1-3 serves the
+  # right side. We match the sysfs devpath of each LED Matrix tty device against these
+  # patterns to reliably identify left vs right regardless of ttyACM enumeration order.
+  mkLedMatrixDiscoveryScript = { side, serviceCfg }:
     let
-      side = if index == 0 then "left" else "right";
       deviceArgs = buildLedMatrixArgs serviceCfg;
+      # USB root hub port pattern for each side of the Framework 16 input module bay
+      usbPattern = if side == "left" then "/1-4/" else "/1-3/";
     in
       pkgs.writeShellScript "inputmodule-led-${side}" ''
-        discover_devices() {
-          devices=()
-          current_dev=""
-          while IFS= read -r line; do
-            if [[ "$line" == /dev/* ]]; then
-              current_dev="$line"
-            elif [[ "$line" == *"LED Matrix"* ]] && [[ -n "$current_dev" ]]; then
-              devices+=("$current_dev")
-              current_dev=""
+        find_device_for_side() {
+          target_dev=""
+          for syspath in /sys/class/tty/ttyACM*/device; do
+            [ -e "$syspath" ] || continue
+            tty_name="''${syspath%/device}"
+            tty_name="''${tty_name##*/}"
+            devpath=$(${pkgs.coreutils}/bin/readlink -f "$syspath")
+
+            # Check if this tty is on the correct USB hub for our side
+            if [[ "$devpath" == *"${usbPattern}"* ]]; then
+              # Verify it's actually an LED Matrix by checking the product string
+              product_file="''${devpath%/*}/product"
+              if [ -f "$product_file" ] && grep -q "LED Matrix" "$product_file" 2>/dev/null; then
+                target_dev="/dev/$tty_name"
+                return 0
+              fi
             fi
-          done < <(${inputmodule-control}/bin/inputmodule-control --list 2>/dev/null)
+          done
+          return 1
         }
 
-        discover_devices
-
         ${if serviceCfg.waitForDevice then ''
-        while [ "''${#devices[@]}" -lt ${toString (index + 1)} ]; do
-          echo "Waiting for LED Matrix devices (need ${toString (index + 1)}, found ''${#devices[@]})..."
+        while ! find_device_for_side; do
+          echo "Waiting for ${side} LED Matrix device (looking for USB hub pattern ${usbPattern})..."
           sleep 2
-          discover_devices
         done
         '' else ''
-        if [ "''${#devices[@]}" -lt ${toString (index + 1)} ]; then
-          echo "Error: Expected at least ${toString (index + 1)} LED Matrix device(s), found ''${#devices[@]}"
+        if ! find_device_for_side; then
+          echo "Error: ${side} LED Matrix device not found (no LED Matrix on USB hub pattern ${usbPattern})"
           exit 1
         fi
         ''}
 
-        echo "Discovered ${side} LED Matrix device: ''${devices[${toString index}]}"
-        exec ${inputmodule-control}/bin/inputmodule-control --serial-dev "''${devices[${toString index}]}" led-matrix ${deviceArgs}
+        echo "Discovered ${side} LED Matrix device: $target_dev"
+        exec ${inputmodule-control}/bin/inputmodule-control --serial-dev "$target_dev" led-matrix ${deviceArgs}
       '';
 
   # Separate "both" entries from regular entries in ledMatrix config
@@ -531,10 +543,7 @@ in
       # "both" LED Matrix - expanded to independent left and right services
       (optionalAttrs (hasBothLedMatrix && bothLedMatrixCfg.enable) (
         let
-          mkBothService = index:
-            let
-              side = if index == 0 then "left" else "right";
-            in
+          mkBothService = side:
               nameValuePair "inputmodule-control-led-${side}" {
                 Unit = {
                   Description = "Framework LED Matrix - ${side}";
@@ -543,7 +552,7 @@ in
 
                 Service = {
                   Type = "simple";
-                  ExecStart = "${mkLedMatrixDiscoveryScript { inherit index; serviceCfg = bothLedMatrixCfg; }}";
+                  ExecStart = "${mkLedMatrixDiscoveryScript { inherit side; serviceCfg = bothLedMatrixCfg; }}";
                   Restart = if bothLedMatrixCfg.restartOnFailure then "on-failure" else "no";
                   RestartSec = bothLedMatrixCfg.restartSec;
                 };
@@ -553,7 +562,7 @@ in
                 };
               };
         in
-          listToAttrs [ (mkBothService 0) (mkBothService 1) ]
+          listToAttrs [ (mkBothService "left") (mkBothService "right") ]
       ))
       //
       # B1 Display services
